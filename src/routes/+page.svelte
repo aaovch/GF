@@ -54,6 +54,7 @@
       result = await loadAndAnalyze(csvText, {
         from: fromMonth || undefined,
         until: untilMonth || undefined,
+        reportMonth: untilMonth || undefined,
         topActive,
         title
       });
@@ -163,7 +164,12 @@
 
     <section class="card report">
       <div class="report-head">
-        <h2>Текстовый отчёт</h2>
+        <h2>
+          Текстовый отчёт
+          {#if result.reportMonthKey}
+            <span class="report-month">за {result.reportMonthKey}</span>
+          {/if}
+        </h2>
         <button
           type="button"
           onclick={() => navigator.clipboard?.writeText(result?.report ?? '')}
@@ -346,6 +352,12 @@
   .report h2 {
     margin: 0;
     font-size: 1.1rem;
+  }
+
+  .report-month {
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 0.95rem;
   }
 
   pre {

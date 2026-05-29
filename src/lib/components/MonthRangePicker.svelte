@@ -107,7 +107,7 @@
     </label>
     <span class="hint">
       {#if from && until}
-        {label(from as MonthKey)} — {label(until as MonthKey)}
+        {label(from as MonthKey)} — {label(until as MonthKey)} · отчёт за «По»
       {:else}
         Выберите месяцы на ленте или в полях
       {/if}

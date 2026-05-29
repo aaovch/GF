@@ -30,6 +30,7 @@ export interface PipelineResult {
   avgLifetime: number;
   retention: RetentionRow[];
   report: string;
+  reportMonthKey: MonthKey | null;
   longData: AttendanceRow[];
   topActive: TopActiveMatrix | null;
 }
@@ -43,6 +44,7 @@ export interface TopActiveMatrix {
 export interface PipelineOptions {
   from?: string;
   until?: string;
+  reportMonth?: string;
   maxMonth?: number;
   topActive?: number;
   title?: string;
@@ -159,6 +161,18 @@ export function filterAttendance(
   }
 
   return filtered;
+}
+
+/** Данные с начала истории до месяца отчёта (без обрезки «с»). */
+export function filterForReport(
+  data: AttendanceRow[],
+  reportMonth?: string,
+  until?: string
+): AttendanceRow[] {
+  const cap = reportMonth ?? until;
+  if (!cap) return data;
+  const untilDate = parseMonthInput(cap);
+  return data.filter((r) => r.month <= untilDate);
 }
 
 export function computeFlow(data: AttendanceRow[]): { flow: FlowRow[]; avgLifetime: number } {
@@ -341,18 +355,22 @@ export function buildActivityMap(rows: Record<string, string>[], fioCol = 'ФИ�
 export function telegramReport(
   data: AttendanceRow[],
   flow: FlowRow[],
-  retention: RetentionRow[]
+  retention: RetentionRow[],
+  reportMonth?: Date
 ): string {
   if (!data.length) return 'Данных нет.';
 
-  const months = [...new Set(data.map((r) => r.month.getTime()))]
-    .sort((a, b) => a - b)
-    .map((t) => new Date(t));
-  const lastMonth = months[months.length - 1];
-  const prevMonths = months.filter((m) => m < lastMonth);
-  const prevMonth = prevMonths.length ? prevMonths[prevMonths.length - 1] : null;
+  const monthTimes = [...new Set(data.map((r) => r.month.getTime()))].sort((a, b) => a - b);
+  const lastMonth =
+    reportMonth ??
+    new Date(monthTimes[monthTimes.length - 1]);
+  const lastTime = lastMonth.getTime();
 
-  const byMonth = (month: Date) => new Set(data.filter((r) => r.month.getTime() === month.getTime()).map((r) => r.fio));
+  const prevTime = monthTimes.filter((t) => t < lastTime).pop();
+  const prevMonth = prevTime != null ? new Date(prevTime) : null;
+
+  const byMonth = (month: Date) =>
+    new Set(data.filter((r) => r.month.getTime() === month.getTime()).map((r) => r.fio));
   const lastSet = byMonth(lastMonth);
   const prevSet = prevMonth ? byMonth(prevMonth) : new Set<string>();
   const beforeLast = new Set(data.filter((r) => r.month < lastMonth).map((r) => r.fio));
@@ -369,7 +387,12 @@ export function telegramReport(
     : [];
 
   const countsByClient = new Map<string, number>();
-  for (const row of data) countsByClient.set(row.fio, (countsByClient.get(row.fio) ?? 0) + 1);
+  const monthsByClient = new Map<string, Set<number>>();
+  for (const row of data) {
+    if (!monthsByClient.has(row.fio)) monthsByClient.set(row.fio, new Set());
+    monthsByClient.get(row.fio)!.add(row.month.getTime());
+  }
+  for (const [fio, set] of monthsByClient) countsByClient.set(fio, set.size);
 
   const leftActive3 = leftClients
     .filter((c) => (countsByClient.get(c) ?? 0) >= 3)
@@ -538,17 +561,31 @@ export function runPipeline(
     throw new Error("В таблице нет колонки 'ФИО'.");
   }
 
-  let longData = meltAttendance(rows);
-  longData = filterAttendance(longData, options);
-  const { flow, avgLifetime } = computeFlow(longData);
-  const retention = computeRetentionFunnel(longData);
-  const report = telegramReport(longData, flow, retention);
+  const allData = meltAttendance(rows);
+  const reportMonthKey = (options.reportMonth ?? options.until) as MonthKey | undefined;
+  const reportData = filterForReport(allData, options.reportMonth, options.until);
+  const displayData = filterAttendance(allData, options);
+
+  const { flow, avgLifetime } = computeFlow(displayData);
+  const { flow: reportFlow } = computeFlow(reportData);
+  const retention = computeRetentionFunnel(displayData);
+
+  const reportMonthDate = reportMonthKey ? parseMonthInput(reportMonthKey) : undefined;
+  const report = telegramReport(reportData, reportFlow, retention, reportMonthDate);
 
   let topActive: TopActiveMatrix | null = null;
   if (options.topActive && options.topActive > 0) {
     const activityMap = buildActivityMap(rows);
-    topActive = computeTopActiveMatrix(longData, options.topActive, activityMap);
+    topActive = computeTopActiveMatrix(displayData, options.topActive, activityMap);
   }
 
-  return { flow, avgLifetime, retention, report, longData, topActive };
+  return {
+    flow,
+    avgLifetime,
+    retention,
+    report,
+    reportMonthKey: reportMonthKey ?? null,
+    longData: displayData,
+    topActive
+  };
 }
