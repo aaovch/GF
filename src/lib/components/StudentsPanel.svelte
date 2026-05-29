@@ -1,7 +1,9 @@
 <script lang="ts">
   import {
+    applyRangeToProfile,
     buildStudentProfiles,
     filterStudents,
+    filterStudentsInRange,
     sortStudents,
     type StudentProfile,
     type StudentSort
@@ -20,7 +22,13 @@
   let sort = $state<StudentSort>('activity');
   let selectedFio = $state<string | null>(null);
 
-  const allStudents = $derived(buildStudentProfiles(rows));
+  const allStudents = $derived(
+    filterStudentsInRange(
+      buildStudentProfiles(rows).map((p) => applyRangeToProfile(p, rangeFrom, rangeUntil)),
+      rangeFrom,
+      rangeUntil
+    )
+  );
   const visibleStudents = $derived(sortStudents(filterStudents(allStudents, query), sort));
   const selected = $derived(
     visibleStudents.find((s) => s.fio === selectedFio) ??
@@ -55,7 +63,12 @@
         </select>
       </label>
     </div>
-    <p class="count">{visibleStudents.length} учеников</p>
+    <p class="count">
+      {visibleStudents.length} учеников
+      {#if rangeFrom || rangeUntil}
+        <span class="range-note">· период {rangeFrom || '…'} — {rangeUntil || '…'}</span>
+      {/if}
+    </p>
     <ul class="student-list">
       {#each visibleStudents as student}
         <li>
@@ -111,13 +124,8 @@
         <p class="legend">
           <span class="dot present"></span> был
           <span class="dot delayed"></span> отложенный платёж
-          <span class="dot range"></span> выбранный период
         </p>
-        <StudentAttendanceBar
-          months={selected.months}
-          {rangeFrom}
-          {rangeUntil}
-        />
+        <StudentAttendanceBar months={selected.months} />
       </section>
     </article>
   {:else}
@@ -174,6 +182,10 @@
     margin: 0 0 0.5rem;
     font-size: 0.82rem;
     color: var(--muted);
+  }
+
+  .range-note {
+    color: var(--accent-dark);
   }
 
   .student-list {
@@ -342,11 +354,6 @@
 
   .dot.delayed {
     background: rgba(214, 160, 40, 0.6);
-  }
-
-  .dot.range {
-    background: #fff;
-    box-shadow: inset 0 0 0 2px var(--accent);
   }
 
   .empty {

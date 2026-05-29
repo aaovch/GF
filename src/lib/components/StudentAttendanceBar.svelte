@@ -1,28 +1,19 @@
 <script lang="ts">
-import type { StudentMonth } from '$lib/analytics/students';
-import type { MonthKey } from '$lib/analytics/pipeline';
+  import type { StudentMonth } from '$lib/analytics/students';
+  import type { MonthKey } from '$lib/analytics/pipeline';
 
-interface Props {
-  months: StudentMonth[];
-  rangeFrom?: string;
-  rangeUntil?: string;
-}
+  interface Props {
+    months: StudentMonth[];
+  }
 
-let { months, rangeFrom = '', rangeUntil = '' }: Props = $props();
+  let { months }: Props = $props();
 
-const MONTH_LABELS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  const MONTH_LABELS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
-function shortLabel(key: MonthKey): string {
-  const [y, m] = key.split('-').map(Number);
-  return `${MONTH_LABELS[m - 1]} ${String(y).slice(2)}`;
-}
-
-function inRange(key: MonthKey): boolean {
-  if (!rangeFrom && !rangeUntil) return false;
-  if (rangeFrom && key < rangeFrom) return false;
-  if (rangeUntil && key > rangeUntil) return false;
-  return true;
-}
+  function shortLabel(key: MonthKey): string {
+    const [y, m] = key.split('-').map(Number);
+    return `${MONTH_LABELS[m - 1]} ${String(y).slice(2)}`;
+  }
 </script>
 
 <div class="bar" role="list" aria-label="Посещения по месяцам">
@@ -31,7 +22,6 @@ function inRange(key: MonthKey): boolean {
       class="cell"
       class:present={m.present}
       class:delayed={m.delayed}
-      class:in-range={inRange(m.key)}
       title="{shortLabel(m.key)}{m.present ? (m.delayed ? ' — отложенный платёж' : ' — был') : ''}"
       role="listitem"
     >
@@ -56,10 +46,6 @@ function inRange(key: MonthKey): boolean {
     background: #f5f5f5;
     font-size: 0.68rem;
     color: var(--muted);
-  }
-
-  .cell.in-range {
-    box-shadow: inset 0 0 0 1px var(--accent);
   }
 
   .cell.present {

@@ -148,7 +148,64 @@ export function buildStudentProfiles(rows: Record<string, string>[]): StudentPro
   return profiles.sort((a, b) => b.activity - a.activity || a.fio.localeCompare(b.fio, 'ru'));
 }
 
-export type StudentSort = 'activity' | 'name' | 'months' | 'last';
+function deriveStatus(
+  presentMonths: StudentMonth[],
+  referenceMonth: MonthKey | null
+): { status: StudentProfile['status']; statusLabel: string } {
+  if (!referenceMonth || !presentMonths.length) {
+    return { status: 'inactive', statusLabel: 'Не ходит' };
+  }
+
+  const presentAtEnd = presentMonths.some((m) => m.key === referenceMonth);
+  if (!presentAtEnd) {
+    return { status: 'inactive', statusLabel: 'Не ходит' };
+  }
+
+  const firstInPeriod = presentMonths[0].key;
+  if (firstInPeriod === referenceMonth) {
+    return { status: 'new', statusLabel: 'Новый' };
+  }
+
+  return { status: 'active', statusLabel: 'Активен' };
+}
+
+/** Оставляет только месяцы и метрики внутри выбранного периода. */
+export function applyRangeToProfile(
+  profile: StudentProfile,
+  from?: string,
+  until?: string
+): StudentProfile {
+  let months = profile.months;
+  if (from) months = months.filter((m) => m.key >= from);
+  if (until) months = months.filter((m) => m.key <= until);
+
+  const presentMonths = months.filter((m) => m.present);
+  const firstMonth = presentMonths[0]?.key ?? null;
+  const lastMonth = presentMonths[presentMonths.length - 1]?.key ?? null;
+  const referenceMonth = until ?? lastMonth;
+  const { status, statusLabel } = deriveStatus(presentMonths, referenceMonth);
+
+  return {
+    ...profile,
+    months,
+    totalMonths: presentMonths.length,
+    firstMonth,
+    lastMonth,
+    lifetimeMonths: firstMonth && lastMonth ? lifetimeBetween(firstMonth, lastMonth) : 0,
+    gapMonths: countGaps(months),
+    status,
+    statusLabel
+  };
+}
+
+export function filterStudentsInRange(
+  list: StudentProfile[],
+  from?: string,
+  until?: string
+): StudentProfile[] {
+  if (!from && !until) return list;
+  return list.filter((s) => s.totalMonths > 0);
+}
 
 export function sortStudents(list: StudentProfile[], sort: StudentSort): StudentProfile[] {
   const copy = [...list];
