@@ -11,52 +11,47 @@ if (-not (Test-Path $gh)) {
   throw "GitHub CLI not found at $gh."
 }
 
-function Invoke-Gh {
-  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
-  $prev = $ErrorActionPreference
-  $ErrorActionPreference = "SilentlyContinue"
-  & $gh @Args 2>&1 | Out-Null
-  $code = $LASTEXITCODE
-  $ErrorActionPreference = $prev
-  return $code
+function Test-GhAuth {
+  cmd /c "`"$gh`" auth status >nul 2>&1"
+  return $LASTEXITCODE -eq 0
 }
 
-$remote = "git@github.com:${Owner}/${Repo}.git"
+function Test-GhRepo {
+  param([string]$Slug)
+  cmd /c "`"$gh`" repo view `"$Slug`" >nul 2>&1"
+  return $LASTEXITCODE -eq 0
+}
+
+$repoUrl = "https://github.com/$Owner/$Repo"
+$siteUrl = "https://$Owner.github.io/$Repo/"
+$remote = "git@github.com:$Owner/$Repo.git"
+
 if (-not (git remote get-url origin 2>$null)) {
   git remote add origin $remote
 } else {
   git remote set-url origin $remote
 }
 
-# Try push first if repo already exists (SSH only, no gh token needed).
-$prev = $ErrorActionPreference
-$ErrorActionPreference = "SilentlyContinue"
-git ls-remote origin refs/heads/main 2>&1 | Out-Null
-$remoteReachable = $LASTEXITCODE -eq 0
-if (-not $remoteReachable) {
-  git push -u origin main 2>&1 | Out-Null
-  $remoteReachable = $LASTEXITCODE -eq 0
-}
-$ErrorActionPreference = $prev
-
-if ($remoteReachable) {
-  Write-Host "Code pushed to https://github.com/${Owner}/${Repo}"
+# Push works without gh if the repository already exists.
+cmd /c "git push -u origin main >nul 2>&1"
+if ($LASTEXITCODE -eq 0) {
+  Write-Host "Code pushed to $repoUrl"
   Write-Host "Enable Pages: Settings -> Pages -> Source: GitHub Actions"
-  Write-Host "Site URL: https://${Owner}.github.io/${Repo}/"
+  Write-Host "Site URL: $siteUrl"
   exit 0
 }
 
-if ((Invoke-Gh auth status) -ne 0) {
+if (-not (Test-GhAuth)) {
   Write-Host "GitHub login required to create the repository."
-  Write-Host "A browser window will open — approve access and enter the one-time code."
+  Write-Host "A browser window will open. Approve access and enter the one-time code."
   & $gh auth login --hostname github.com --git-protocol ssh --web
-  if ((Invoke-Gh auth status) -ne 0) {
+  if (-not (Test-GhAuth)) {
     throw "GitHub login was not completed."
   }
 }
 
-if ((Invoke-Gh repo view "${Owner}/${Repo}") -ne 0) {
-  Write-Host "Creating repository ${Owner}/${Repo}..."
+if (-not (Test-GhRepo "$Owner/$Repo")) {
+  Write-Host "Creating repository $Owner/$Repo..."
   & $gh repo create $Repo --public --source . --remote origin --push
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to create repository."
@@ -70,6 +65,6 @@ if ((Invoke-Gh repo view "${Owner}/${Repo}") -ne 0) {
 }
 
 Write-Host ""
-Write-Host "Done: https://github.com/${Owner}/${Repo}"
+Write-Host "Done: $repoUrl"
 Write-Host "Enable Pages: Settings -> Pages -> Source: GitHub Actions"
-Write-Host "Site URL: https://${Owner}.github.io/${Repo}/"
+Write-Host "Site URL: $siteUrl"
