@@ -44,7 +44,7 @@ if ($LASTEXITCODE -eq 0) {
 if (-not (Test-GhAuth)) {
   Write-Host "GitHub login required to create the repository."
   Write-Host "A browser window will open. Approve access and enter the one-time code."
-  & $gh auth login --hostname github.com --git-protocol ssh --web
+  & $gh auth login --hostname github.com --git-protocol ssh --web --skip-ssh-key
   if (-not (Test-GhAuth)) {
     throw "GitHub login was not completed."
   }
