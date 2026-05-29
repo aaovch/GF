@@ -1,3 +1,4 @@
+<script lang="ts">
 import type { StudentMonth } from '$lib/analytics/students';
 import type { MonthKey } from '$lib/analytics/pipeline';
 
