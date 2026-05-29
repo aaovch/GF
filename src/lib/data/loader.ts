@@ -1,10 +1,13 @@
 import Papa from 'papaparse';
-import { runPipeline, type PipelineOptions, type PipelineResult } from '$lib/analytics/pipeline';
+import {
+  getAvailableMonthKeys,
+  runPipeline,
+  type MonthKey,
+  type PipelineOptions,
+  type PipelineResult
+} from '$lib/analytics/pipeline';
 
-export async function loadAndAnalyze(
-  csvText: string,
-  options: PipelineOptions = {}
-): Promise<PipelineResult> {
+function parseCsv(csvText: string): Record<string, string>[] {
   const parsed = Papa.parse<Record<string, string>>(csvText, {
     header: true,
     skipEmptyLines: 'greedy',
@@ -15,7 +18,18 @@ export async function loadAndAnalyze(
     console.warn('CSV parse warnings:', parsed.errors);
   }
 
-  return runPipeline(parsed.data, {
+  return parsed.data;
+}
+
+export function getMonthsFromCsv(csvText: string): MonthKey[] {
+  return getAvailableMonthKeys(parseCsv(csvText));
+}
+
+export async function loadAndAnalyze(
+  csvText: string,
+  options: PipelineOptions = {}
+): Promise<PipelineResult> {
+  return runPipeline(parseCsv(csvText), {
     topActive: 20,
     ...options
   });

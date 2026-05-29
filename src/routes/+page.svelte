@@ -1,27 +1,59 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
-  import { fetchDefaultData, loadAndAnalyze } from '$lib/data/loader';
-  import type { PipelineResult } from '$lib/analytics/pipeline';
+  import { fetchDefaultData, getMonthsFromCsv, loadAndAnalyze } from '$lib/data/loader';
+  import type { MonthKey, PipelineResult } from '$lib/analytics/pipeline';
   import FlowChart from '$lib/components/FlowChart.svelte';
   import SimpleLineChart from '$lib/components/SimpleLineChart.svelte';
   import RetentionChart from '$lib/components/RetentionChart.svelte';
   import TopActiveHeatmap from '$lib/components/TopActiveHeatmap.svelte';
+  import MonthRangePicker from '$lib/components/MonthRangePicker.svelte';
 
   let loading = $state(true);
   let error = $state<string | null>(null);
   let result = $state<PipelineResult | null>(null);
-  let until = $state('');
+  let csvText = $state('');
+  let availableMonths = $state<MonthKey[]>([]);
+  let fromMonth = $state('');
+  let untilMonth = $state('');
   let topActive = $state(20);
   let title = $state('Поток клиентов');
 
-  async function analyze(csvText?: string) {
+  function normalizeRange() {
+    if (fromMonth && untilMonth && fromMonth > untilMonth) {
+      const tmp = fromMonth;
+      fromMonth = untilMonth;
+      untilMonth = tmp;
+    }
+  }
+
+  async function analyze(text?: string) {
     loading = true;
     error = null;
     try {
-      const text = csvText ?? (await fetchDefaultData());
-      result = await loadAndAnalyze(text, {
-        until: until || undefined,
+      if (text !== undefined) {
+        csvText = text;
+        availableMonths = getMonthsFromCsv(csvText);
+        if (availableMonths.length) {
+          fromMonth = availableMonths[0];
+          untilMonth = availableMonths[availableMonths.length - 1];
+        }
+      }
+
+      if (!csvText) {
+        csvText = await fetchDefaultData();
+        availableMonths = getMonthsFromCsv(csvText);
+        if (availableMonths.length) {
+          fromMonth = availableMonths[0];
+          untilMonth = availableMonths[availableMonths.length - 1];
+        }
+      }
+
+      normalizeRange();
+
+      result = await loadAndAnalyze(csvText, {
+        from: fromMonth || undefined,
+        until: untilMonth || undefined,
         topActive,
         title
       });
@@ -33,12 +65,18 @@
     }
   }
 
+  function onRangeChange(from: string, until: string) {
+    fromMonth = from;
+    untilMonth = until;
+    normalizeRange();
+    analyze();
+  }
+
   async function onFileSelect(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    await analyze(text);
+    await analyze(await file.text());
   }
 
   onMount(() => analyze());
@@ -57,10 +95,6 @@
     </div>
     <div class="controls">
       <label>
-        До месяца (YYYY-MM)
-        <input type="month" bind:value={until} />
-      </label>
-      <label>
         ТОП активных
         <input type="number" min="0" max="50" bind:value={topActive} />
       </label>
@@ -71,6 +105,15 @@
       </label>
     </div>
   </header>
+
+  {#if availableMonths.length}
+    <MonthRangePicker
+      months={availableMonths}
+      bind:from={fromMonth}
+      bind:until={untilMonth}
+      onchange={onRangeChange}
+    />
+  {/if}
 
   {#if loading}
     <div class="state">Загрузка данных…</div>
@@ -83,7 +126,7 @@
         <strong>{result.avgLifetime.toFixed(1)} мес</strong>
       </article>
       <article>
-        <span>Месяцев в данных</span>
+        <span>Месяцев в периоде</span>
         <strong>{result.flow.length}</strong>
       </article>
       <article>
@@ -133,7 +176,7 @@
   {/if}
 
   <footer>
-  <span>Данные по умолчанию: <code>{base}/data/table.csv</code></span>
+    <span>Данные по умолчанию: <code>{base}/data/table.csv</code></span>
   </footer>
 </div>
 
@@ -175,7 +218,7 @@
     gap: 1.25rem;
     justify-content: space-between;
     align-items: end;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
   }
 
   .eyebrow {
@@ -211,13 +254,12 @@
     color: var(--muted);
   }
 
-  input[type='month'],
   input[type='number'] {
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 0.45rem 0.6rem;
     background: #fff;
-    min-width: 8rem;
+    min-width: 5rem;
   }
 
   button,

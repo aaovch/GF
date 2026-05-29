@@ -41,6 +41,7 @@ export interface TopActiveMatrix {
 }
 
 export interface PipelineOptions {
+  from?: string;
   until?: string;
   maxMonth?: number;
   topActive?: number;
@@ -118,27 +119,46 @@ export function meltAttendance(
   return result.sort((a, b) => a.month.getTime() - b.month.getTime() || a.fio.localeCompare(b.fio, 'ru'));
 }
 
-export function parseUntilMonth(until: string): Date {
-  const s = until.trim().replace('.', '-');
+export function parseMonthInput(value: string): Date {
+  const s = value.trim().replace('.', '-');
   const [year, month] = s.split('-').map(Number);
-  if (!year || !month) throw new Error('--until должен быть в формате YYYY-MM');
+  if (!year || !month) throw new Error('Месяц должен быть в формате YYYY-MM');
   return new Date(year, month - 1, 1);
+}
+
+/** @deprecated use parseMonthInput */
+export function parseUntilMonth(until: string): Date {
+  return parseMonthInput(until);
+}
+
+export function getAvailableMonthKeys(rows: Record<string, string>[]): MonthKey[] {
+  if (!rows.length) return [];
+  return detectMonthColumns(Object.keys(rows[0]))
+    .map((col) => monthKey(parseMonthColumn(col)))
+    .sort();
 }
 
 export function filterAttendance(
   data: AttendanceRow[],
-  options: Pick<PipelineOptions, 'until' | 'maxMonth'>
+  options: Pick<PipelineOptions, 'from' | 'until' | 'maxMonth'>
 ): AttendanceRow[] {
-  if (options.until) {
-    const until = parseUntilMonth(options.until);
-    return data.filter((r) => r.month <= until);
+  let filtered = data;
+
+  if (options.from) {
+    const from = parseMonthInput(options.from);
+    filtered = filtered.filter((r) => r.month >= from);
   }
-  if (options.maxMonth != null) {
+  if (options.until) {
+    const until = parseMonthInput(options.until);
+    filtered = filtered.filter((r) => r.month <= until);
+  }
+  if (!options.from && !options.until && options.maxMonth != null) {
     const m = options.maxMonth;
     if (m < 1 || m > 12) throw new Error('--max-month должен быть в диапазоне 1..12');
-    return data.filter((r) => r.month.getMonth() + 1 <= m);
+    filtered = filtered.filter((r) => r.month.getMonth() + 1 <= m);
   }
-  return data;
+
+  return filtered;
 }
 
 export function computeFlow(data: AttendanceRow[]): { flow: FlowRow[]; avgLifetime: number } {
