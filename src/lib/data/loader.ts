@@ -21,6 +21,10 @@ function parseCsv(csvText: string): Record<string, string>[] {
   return parsed.data;
 }
 
+export function getCsvRows(csvText: string): Record<string, string>[] {
+  return parseCsv(csvText);
+}
+
 export function getMonthsFromCsv(csvText: string): MonthKey[] {
   return getAvailableMonthKeys(parseCsv(csvText));
 }

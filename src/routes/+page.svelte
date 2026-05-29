@@ -1,18 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
-  import { fetchDefaultData, getMonthsFromCsv, loadAndAnalyze } from '$lib/data/loader';
+  import { fetchDefaultData, getCsvRows, getMonthsFromCsv, loadAndAnalyze } from '$lib/data/loader';
   import type { MonthKey, PipelineResult } from '$lib/analytics/pipeline';
   import FlowChart from '$lib/components/FlowChart.svelte';
   import SimpleLineChart from '$lib/components/SimpleLineChart.svelte';
   import RetentionChart from '$lib/components/RetentionChart.svelte';
   import TopActiveHeatmap from '$lib/components/TopActiveHeatmap.svelte';
   import MonthRangePicker from '$lib/components/MonthRangePicker.svelte';
+  import StudentsPanel from '$lib/components/StudentsPanel.svelte';
 
+  type TabId = 'analytics' | 'students';
+
+  let activeTab = $state<TabId>('analytics');
   let loading = $state(true);
   let error = $state<string | null>(null);
   let result = $state<PipelineResult | null>(null);
   let csvText = $state('');
+  let csvRows = $state<Record<string, string>[]>([]);
   let availableMonths = $state<MonthKey[]>([]);
   let fromMonth = $state('');
   let untilMonth = $state('');
@@ -33,6 +38,7 @@
     try {
       if (text !== undefined) {
         csvText = text;
+        csvRows = getCsvRows(csvText);
         availableMonths = getMonthsFromCsv(csvText);
         if (availableMonths.length) {
           fromMonth = availableMonths[0];
@@ -42,6 +48,7 @@
 
       if (!csvText) {
         csvText = await fetchDefaultData();
+        csvRows = getCsvRows(csvText);
         availableMonths = getMonthsFromCsv(csvText);
         if (availableMonths.length) {
           fromMonth = availableMonths[0];
@@ -107,6 +114,15 @@
     </div>
   </header>
 
+  <nav class="tabs" aria-label="Разделы">
+    <button type="button" class:active={activeTab === 'analytics'} onclick={() => (activeTab = 'analytics')}>
+      Аналитика
+    </button>
+    <button type="button" class:active={activeTab === 'students'} onclick={() => (activeTab = 'students')}>
+      Ученики
+    </button>
+  </nav>
+
   {#if availableMonths.length}
     <MonthRangePicker
       months={availableMonths}
@@ -120,6 +136,8 @@
     <div class="state">Загрузка данных…</div>
   {:else if error}
     <div class="state error">{error}</div>
+  {:else if activeTab === 'students'}
+    <StudentsPanel rows={csvRows} rangeFrom={fromMonth} rangeUntil={untilMonth} />
   {:else if result}
     <section class="metrics">
       <article>
@@ -224,7 +242,38 @@
     gap: 1.25rem;
     justify-content: space-between;
     align-items: end;
+    margin-bottom: 0.75rem;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0.35rem;
     margin-bottom: 1rem;
+    padding: 0.25rem;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: fit-content;
+  }
+
+  .tabs button {
+    border: 0;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tabs button.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .tabs button:not(.active):hover {
+    background: rgba(47, 111, 78, 0.1);
+    color: var(--accent-dark);
   }
 
   .eyebrow {
